@@ -11,7 +11,6 @@ echo  -e "\nChecking $MANTA_URL \n"
 
 MURL=$(sed 's@https://@@' <<< $MANTA_URL)
 
-
 echo 'Checking manta frontend services.......'
 
 for fip in $(dig A +short $MURL @8.8.8.8)
@@ -20,7 +19,6 @@ do
 	CEXT=$([ $? == "0" -o -n "$CRES" ] && echo OK || echo ERR)
 	printf "%16s [%3s]\n" $fip $CEXT
 done
-
 
 ## Test putting a dummy file in manta ##
 echo -e "\nPushing 1MB of data to manta\n"
@@ -47,3 +45,20 @@ TRES="$(sh -c "time -p mget -o ${DUMMY}.o ~~/stor/dummy &> /dev/null" 2>&1)"
 TRES=$(cut -f2 -d' ' <<< $TRES)
 GSPD=$(echo "scale=2; 1024 / $TRES "| bc)
 printf "\nGet speed: %.2f KB/s\n" $GSPD
+
+## Sample job to calculate the size of the dummy file ##
+
+JOU=/tmp/mnoc_job_command_oupout
+JOB="echo ~~/stor/dummy | mjob create -o -m \"wc -c | tr -d [:space:]\" -r cat"
+echo -e "\nRunning a dummy job to caclulate the size of dummy\n$JOB\n"
+
+sh -c "$JOB" 2>&1 | tee $JOU
+
+JID=$(grep added $JOU | sed 's/added 1 input to //')
+JINFO=$(mjob get $JID)
+JINFO=$(json -e 'this.runTime = Math.abs(new Date(this.timeDone) - new Date(this.timeCreated))/1e3;' <<<$JINFO)
+
+echo "Job state: $(json state<<<$JINFO)"
+echo "Job creation time: $(json timeCreated<<<$JINFO)"
+echo "Job finish time: $(json timeDone<<<$JINFO)"
+echo "Job running time: $(json runTime<<<$JINFO) seconds "
